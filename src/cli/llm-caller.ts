@@ -39,7 +39,8 @@ function getApiKey(provider: string): string | undefined {
 }
 
 /**
- * Read OpenAI API key from Codex CLI's stored auth (~/.codex/auth.json).
+ * Read OpenAI auth from Codex CLI's stored credentials (~/.codex/auth.json).
+ * Supports both API key accounts and ChatGPT OAuth accounts.
  */
 function getCodexApiKey(): string | undefined {
   // Prefer explicit env var
@@ -47,7 +48,11 @@ function getCodexApiKey(): string | undefined {
   try {
     const authPath = join(homedir(), '.codex', 'auth.json');
     const auth = JSON.parse(readFileSync(authPath, 'utf-8'));
-    return auth.OPENAI_API_KEY || undefined;
+    // API key account
+    if (auth.OPENAI_API_KEY) return auth.OPENAI_API_KEY;
+    // ChatGPT OAuth account — use access token
+    if (auth.tokens?.access_token) return auth.tokens.access_token;
+    return undefined;
   } catch {
     return undefined;
   }
