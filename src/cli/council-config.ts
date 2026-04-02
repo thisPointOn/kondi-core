@@ -28,6 +28,7 @@ export interface CouncilPersonaConfig {
   domain?: string;
   temperature?: number;
   suppressPersona?: boolean;
+  toolAccess?: 'full' | 'none';
 }
 
 export interface CouncilConfigFile {

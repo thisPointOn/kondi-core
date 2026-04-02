@@ -35,10 +35,10 @@ function getApiKey(provider: string): string | undefined {
   }
 }
 
-const DEFAULT_MODELS: Record<string, string> = {
+export const DEFAULT_MODELS: Record<string, string> = {
   'anthropic-cli': 'claude-sonnet-4-5-20250929',
   'anthropic-api': 'claude-sonnet-4-5-20250929',
-  'openai-cli': 'gpt-5.2-codex',
+  'openai-cli': 'default',  // signals codex-caller to omit --model flag
   'openai-api': 'gpt-4o',
   'deepseek': 'deepseek-chat',
   'google': 'models/gemini-2.5-flash',

@@ -34,7 +34,7 @@ export async function callCodex(opts: {
 
   args.push('--json', '--skip-git-repo-check');
 
-  if (opts.model) {
+  if (opts.model && opts.model !== 'default') {
     args.push('--model', opts.model);
   }
 

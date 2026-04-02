@@ -30,7 +30,7 @@ import { DeliberationOrchestrator } from '../council/deliberation-orchestrator';
 import { CodingOrchestrator } from '../council/coding-orchestrator';
 import { ledgerStore } from '../council/ledger-store';
 import { buildAbbreviatedSummary } from '../services/deliberationSummary';
-import { callLLM } from './llm-caller';
+import { callLLM, DEFAULT_MODELS } from './llm-caller';
 import { activeChildren as claudeChildren } from './claude-caller';
 import { activeChildren as codexChildren } from './codex-caller';
 import { loadCouncilConfig, mergeConfigWithArgs } from './council-config';
@@ -248,16 +248,17 @@ async function main() {
       sessionExport = resolved.sessionExport;
 
       const defaultProvider = resolved.provider || 'anthropic-cli';
-      const defaultModel = resolved.model || 'claude-sonnet-4-5-20250929';
 
       council = createCouncilFromSetup({
         name: configFile.name,
         topic: task,
-        personas: configFile.personas.map(p => ({
+        personas: configFile.personas.map(p => {
+          const prov = p.provider || defaultProvider;
+          return {
           name: p.name,
           role: p.role,
-          provider: p.provider || defaultProvider,
-          model: p.model || defaultModel,
+          provider: prov,
+          model: p.model || resolved.model || DEFAULT_MODELS[prov] || '',
           avatar: p.avatar,
           systemPrompt: p.systemPrompt || `You are ${p.name}.`,
           traits: p.traits || [],
@@ -265,7 +266,8 @@ async function main() {
           domain: p.domain,
           temperature: p.temperature,
           suppressPersona: p.suppressPersona,
-        })),
+          toolAccess: p.toolAccess,
+        }}),
         workingDirectory: workingDir,
         stepType: councilType,
         contextTokenBudget: configFile.orchestration?.contextTokenBudget || 80000,

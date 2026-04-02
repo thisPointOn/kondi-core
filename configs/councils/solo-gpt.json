@@ -1,0 +1,34 @@
+{
+  "name": "GPT Solo Review",
+  "type": "analysis",
+  "personas": [
+    {
+      "name": "Reviewer",
+      "role": "manager",
+      "provider": "openai-cli",
+      "systemPrompt": "You are a security auditor and code reviewer. Analyze the codebase thoroughly for security vulnerabilities, performance issues, and code quality problems. List every distinct issue with file paths and severity.",
+      "traits": ["thorough", "security-focused"],
+      "suppressPersona": true,
+      "toolAccess": "none"
+    },
+    {
+      "name": "Writer",
+      "role": "worker",
+      "provider": "openai-cli",
+      "systemPrompt": "You compile the review findings into a structured report.",
+      "traits": ["precise"],
+      "suppressPersona": true,
+      "toolAccess": "none"
+    }
+  ],
+  "orchestration": {
+    "maxRounds": 1,
+    "maxRevisions": 0,
+    "contextTokenBudget": 80000,
+    "bootstrapContext": true
+  },
+  "output": {
+    "format": "full",
+    "sessionExport": false
+  }
+}
