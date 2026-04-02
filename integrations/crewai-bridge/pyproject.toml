@@ -12,4 +12,4 @@ dependencies = ["crewai>=0.50.0"]
 keywords = ["crewai", "ai", "council", "multi-agent", "deliberation", "code-review"]
 
 [project.urls]
-Repository = "https://github.com/yourusername/kondi"
+Repository = "https://github.com/thisPointOn/kondi-core"

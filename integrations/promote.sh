@@ -25,7 +25,7 @@ VERSION=$(node -e "console.log(require('$ROOT_DIR/package.json').version)")
 DRY_RUN=false
 STEP=""
 GITHUB_USER=""
-GITHUB_REPO="kondi"
+GITHUB_REPO="kondi-core"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -50,7 +50,7 @@ if [[ -z "$GITHUB_USER" ]]; then
   GITHUB_USER=$(gh api user --jq .login 2>/dev/null || echo "")
   if [[ -z "$GITHUB_USER" ]]; then
     echo "Could not detect GitHub user. Run: gh auth login"
-    echo "Or pass: --github-user yourusername"
+    echo "Or pass: --github-user thisPointOn"
     exit 1
   fi
 fi
