@@ -2268,19 +2268,13 @@ export class DeliberationOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // Inject bootstrapped context + access instructions into every prompt.
-    // If tools are available (skipTools is false), tell the model it can use both.
-    // If tools are unavailable, tell it the code is in the prompt.
-    const hasTools = !invocation.skipTools;
+    // Inject bootstrapped context into every prompt — same instruction for all models.
     if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
-        const accessNote = hasTools
-          ? 'The source code below is provided for reference. You also have tools to read additional files.'
-          : 'The source code and project structure are provided below. Analyze them directly — do not say you need tools or external access.';
         invocation = {
           ...invocation,
-          userMessage: `${accessNote}\n\n${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+          userMessage: `## PROJECT CONTEXT\n\nThe complete source code and project structure are provided below. This is your primary source of information. Analyze the code directly from what is provided here.\n\n${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
         };
       }
     }
