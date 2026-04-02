@@ -2268,14 +2268,19 @@ export class DeliberationOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // All providers are API-based (no tools). Inject bootstrapped directory
-    // context into every prompt so all personas see the same codebase.
+    // Inject bootstrapped context + access instructions into every prompt.
+    // If tools are available (skipTools is false), tell the model it can use both.
+    // If tools are unavailable, tell it the code is in the prompt.
+    const hasTools = !invocation.skipTools;
     if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
+        const accessNote = hasTools
+          ? 'The source code below is provided for reference. You also have tools to read additional files.'
+          : 'The source code and project structure are provided below. Analyze them directly — do not say you need tools or external access.';
         invocation = {
           ...invocation,
-          userMessage: `${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+          userMessage: `${accessNote}\n\n${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
         };
       }
     }

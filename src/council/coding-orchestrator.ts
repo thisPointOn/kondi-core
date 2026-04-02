@@ -914,13 +914,17 @@ export class CodingOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // All providers are API-based. Inject bootstrapped context into every prompt.
+    // Inject bootstrapped context + access instructions.
+    const hasTools = !invocation.skipTools;
     if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
+        const accessNote = hasTools
+          ? 'The source code below is provided for reference. You also have tools to read additional files.'
+          : 'The source code and project structure are provided below. Analyze them directly — do not say you need tools or external access.';
         invocation = {
           ...invocation,
-          userMessage: `${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+          userMessage: `${accessNote}\n\n${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
         };
       }
     }
