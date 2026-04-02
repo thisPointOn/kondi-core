@@ -41,7 +41,7 @@ function saveToDisk(data: Record<string, string>) {
     ensureDir();
     fs.writeFileSync(STATE_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('[localStorage-shim] Failed to save state file:', err);
+    console.warn('[localStorage-shim] WARNING: Failed to save state file — data may be lost:', err);
   }
 }
 

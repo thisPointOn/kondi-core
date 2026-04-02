@@ -21,13 +21,20 @@
 // In-Memory Data Store (primary authority for council artifact data)
 // ============================================================================
 
+const MAX_ENTRIES = 10000;
+
 class CouncilDataStore {
   private cache = new Map<string, string>();
 
   getItem(key: string): string | null {
     // Primary: in-memory cache
     const cached = this.cache.get(key);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      // Move to end for LRU ordering
+      this.cache.delete(key);
+      this.cache.set(key, cached);
+      return cached;
+    }
 
     // Fallback: localStorage (picks up data from prior sessions / initial load)
     try {
@@ -42,7 +49,11 @@ class CouncilDataStore {
   }
 
   setItem(key: string, value: string): void {
-    // Primary: always succeeds — no size limit
+    // Evict oldest entries if at capacity
+    if (!this.cache.has(key) && this.cache.size >= MAX_ENTRIES) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) this.cache.delete(oldest);
+    }
     this.cache.set(key, value);
 
     // Secondary: best-effort localStorage mirror for UI observation.

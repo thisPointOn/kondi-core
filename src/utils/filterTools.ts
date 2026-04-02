@@ -7,7 +7,7 @@ export const BUILTIN_SERVER_IDS = [LOCAL_SERVER_ID, 'kondi-search'];
 /**
  * Filter MCP tools map based on allowed server IDs.
  *   undefined  → all servers (unrestricted)
- *   []         → built-in servers only (restricted, no external)
+ *   []         → no servers at all (fully restricted)
  *   ['a','b']  → built-in servers + listed servers
  */
 export function filterToolsByServerIds(
@@ -16,8 +16,9 @@ export function filterToolsByServerIds(
 ): Map<string, { serverId: string; tools: MCPTool[] }> {
   if (allowedServerIds === undefined) return tools;
   const filtered = new Map<string, { serverId: string; tools: MCPTool[] }>();
+  const includeBuiltins = allowedServerIds.length > 0;
   for (const [key, value] of tools) {
-    if (BUILTIN_SERVER_IDS.includes(key) || allowedServerIds.includes(key)) {
+    if ((includeBuiltins && BUILTIN_SERVER_IDS.includes(key)) || allowedServerIds.includes(key)) {
       filtered.set(key, value);
     }
   }

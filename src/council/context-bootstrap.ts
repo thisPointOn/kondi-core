@@ -7,7 +7,7 @@
 
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 const MAX_FILE_SIZE = 2048; // chars per key file
 const MAX_TOTAL_CHARS = 10000;
@@ -67,6 +67,9 @@ export async function bootstrapDirectoryContext(
 
       try {
         const filePath = join(workingDir.replace(/\/$/, ''), fileName);
+        const resolvedPath = resolve(filePath);
+        const resolvedBase = resolve(workingDir);
+        if (!resolvedPath.startsWith(resolvedBase + '/') && resolvedPath !== resolvedBase) continue;
         if (!existsSync(filePath)) continue;
 
         const content = readFileSync(filePath, 'utf-8');

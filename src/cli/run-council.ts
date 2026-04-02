@@ -31,6 +31,8 @@ import { CodingOrchestrator } from '../council/coding-orchestrator';
 import { ledgerStore } from '../council/ledger-store';
 import { buildAbbreviatedSummary } from '../services/deliberationSummary';
 import { callLLM } from './llm-caller';
+import { activeChildren as claudeChildren } from './claude-caller';
+import { activeChildren as codexChildren } from './codex-caller';
 import { loadCouncilConfig, mergeConfigWithArgs } from './council-config';
 import { writeCouncilArtifacts, buildJsonResult } from './council-artifacts';
 import { exportCouncilSession } from './council-session-export';
@@ -209,7 +211,13 @@ async function main() {
       console.error(`File not found: ${args.councilJsonPath}`);
       process.exit(1);
     }
-    const raw = JSON.parse(fs.readFileSync(args.councilJsonPath, 'utf-8'));
+    let raw: any;
+    try {
+      raw = JSON.parse(fs.readFileSync(args.councilJsonPath, 'utf-8'));
+    } catch (e) {
+      console.error(`Invalid JSON in council file: ${args.councilJsonPath}`);
+      process.exit(1);
+    }
 
     if (raw.personas && raw.deliberation) {
       council = raw as Council;
@@ -371,15 +379,20 @@ async function main() {
       const orchestrator = new CodingOrchestrator({
         ...callbacks,
         runCommand: async (cmd: string, cwd?: string) => {
-          const { execSync } = await import('node:child_process');
+          const { execFileSync } = await import('node:child_process');
           try {
-            const stdout = execSync(cmd, { cwd: cwd || workingDir, encoding: 'utf-8', timeout: 120_000 });
+            const stdout = execFileSync('/bin/sh', ['-c', cmd], { cwd: cwd || workingDir, encoding: 'utf-8', timeout: 120_000 });
             return { stdout, stderr: '', exitCode: 0 };
           } catch (err: any) {
             return { stdout: err.stdout || '', stderr: err.stderr || err.message, exitCode: err.status || 1 };
           }
         },
         readFile: async (filePath: string) => {
+          const resolved = path.resolve(filePath);
+          const base = path.resolve(effectiveWorkingDir);
+          if (!resolved.startsWith(base + path.sep) && resolved !== base) {
+            throw new Error(`Path traversal blocked: ${filePath} escapes working directory`);
+          }
           return fs.readFileSync(filePath, 'utf-8');
         },
       });
@@ -462,6 +475,16 @@ async function main() {
     process.exit(1);
   }
 }
+
+// Kill any lingering child processes on exit
+function cleanupChildren() {
+  for (const child of [...claudeChildren, ...codexChildren]) {
+    try { child.kill('SIGTERM'); } catch { /* already exited */ }
+  }
+}
+process.on('exit', cleanupChildren);
+process.on('SIGINT', () => { cleanupChildren(); process.exit(130); });
+process.on('SIGTERM', () => { cleanupChildren(); process.exit(143); });
 
 main().catch((err) => {
   console.error(`${C.red}Unhandled error:${C.reset}`, err);

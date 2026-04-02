@@ -4,8 +4,11 @@
  * and returns an AgentResponse-compatible result.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { parseStreamJsonOutput } from '../pipeline/output-parsers';
+
+/** Active child processes — for cleanup on parent exit */
+export const activeChildren = new Set<ChildProcess>();
 
 export interface CallerResult {
   content: string;
@@ -93,6 +96,7 @@ export async function callClaude(opts: {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, CLAUDECODE: undefined },
     });
+    activeChildren.add(child);
 
     // Timeout: kill child process if it exceeds the limit
     const timeoutMs = opts.timeoutMs || 600_000;
@@ -109,6 +113,7 @@ export async function callClaude(opts: {
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
     child.on('close', (code) => {
+      activeChildren.delete(child);
       clearTimeout(timer);
       const rawStdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const rawStderr = Buffer.concat(stderrChunks).toString('utf-8');

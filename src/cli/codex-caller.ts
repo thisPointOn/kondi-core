@@ -4,9 +4,12 @@
  * and returns a CallerResult-compatible result.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { parseCodexJsonOutput } from '../pipeline/output-parsers';
 import type { CallerResult } from './claude-caller';
+
+/** Active child processes — for cleanup on parent exit */
+export const activeChildren = new Set<ChildProcess>();
 
 /**
  * Call Codex CLI and return the result.
@@ -74,6 +77,7 @@ export async function callCodex(opts: {
         DEBIAN_FRONTEND: 'noninteractive',
       },
     });
+    activeChildren.add(child);
 
     // Timeout: kill process group if it exceeds the limit
     const timeoutMs = opts.timeoutMs || 600_000;
@@ -90,6 +94,7 @@ export async function callCodex(opts: {
     child.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
 
     child.on('close', (code) => {
+      activeChildren.delete(child);
       clearTimeout(timer);
       const rawStdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const rawStderr = Buffer.concat(stderrChunks).toString('utf-8');
