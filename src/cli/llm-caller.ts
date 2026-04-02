@@ -6,6 +6,9 @@
  * Mirrors the GUI's llm-router.ts but without Tauri dependencies.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { callClaude, type CallerResult } from './claude-caller';
 import { callCodex } from './codex-caller';
 
@@ -32,6 +35,21 @@ function getApiKey(provider: string): string | undefined {
     case 'xai': return process.env.XAI_API_KEY;
     case 'google': return process.env.GOOGLE_API_KEY;
     default: return undefined;
+  }
+}
+
+/**
+ * Read OpenAI API key from Codex CLI's stored auth (~/.codex/auth.json).
+ */
+function getCodexApiKey(): string | undefined {
+  // Prefer explicit env var
+  if (process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
+  try {
+    const authPath = join(homedir(), '.codex', 'auth.json');
+    const auth = JSON.parse(readFileSync(authPath, 'utf-8'));
+    return auth.OPENAI_API_KEY || undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -193,6 +211,15 @@ export async function callLLM(opts: CallLLMOpts): Promise<CallerResult> {
     return callClaude({ ...opts, model });
   }
   if (provider === 'openai-cli') {
+    // When tools are skipped, bypass Codex CLI (which sandboxes everything)
+    // and call OpenAI API directly using Codex's stored auth token.
+    if (opts.skipTools) {
+      const apiKey = getCodexApiKey();
+      if (apiKey) {
+        const apiModel = (model && model !== 'default') ? model : 'gpt-4o';
+        return callOpenAICompatible('https://api.openai.com/v1', apiKey, apiModel, opts.systemPrompt, opts.userMessage);
+      }
+    }
     return callCodex({ ...opts, model });
   }
 

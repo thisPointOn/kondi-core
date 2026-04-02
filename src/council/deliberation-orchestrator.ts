@@ -165,6 +165,8 @@ const PHASE_TRANSITIONS: Record<DeliberationPhase, {
 export class DeliberationOrchestrator {
   private config: OrchestratorConfig;
   private activeCouncilId: string | null = null;
+  /** Bootstrapped directory context — shared with all personas via prompt */
+  private bootstrappedContext: string = '';
 
   constructor(config: OrchestratorConfig) {
     this.config = config;
@@ -556,17 +558,17 @@ export class DeliberationOrchestrator {
     // Show manager as thinking immediately (before bootstrap, which can be slow)
     this.config.onAgentThinkingStart?.(manager, Date.now(), rawProblem);
 
-    // Bootstrap directory context if enabled
+    // Bootstrap directory context if enabled — stored for all personas
     let enrichedProblem = rawProblem;
     if (council.deliberation?.bootstrapContext && council.deliberation?.workingDirectory) {
       try {
         const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory);
         if (dirContext) {
+          this.bootstrappedContext = dirContext;
           enrichedProblem = `${dirContext}\n\n---\n\n${rawProblem}`;
         }
       } catch (error) {
         console.warn('[Orchestrator] Directory context bootstrap failed:', error);
-        // Clear thinking on bootstrap failure before continuing
       }
     }
 
@@ -2264,6 +2266,22 @@ export class DeliberationOrchestrator {
 
     if (roleAssignment?.allowedServerIds) {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
+    }
+
+    // When tools are unavailable (skipTools, non-CLI providers, sandboxed CLIs),
+    // inject bootstrapped directory context directly into the prompt so every
+    // persona sees the same baseline regardless of provider.
+    if (persona.provider === 'openai-cli') {
+      invocation = { ...invocation, skipTools: true };
+    }
+    if (invocation.skipTools && this.bootstrappedContext) {
+      const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
+      if (!hasContext) {
+        invocation = {
+          ...invocation,
+          userMessage: `${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+        };
+      }
     }
 
     // Inject brevity instruction if maxWordsPerResponse is configured

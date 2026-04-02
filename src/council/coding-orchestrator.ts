@@ -109,6 +109,8 @@ export class CodingOrchestrator {
   private config: CodingOrchestratorConfig;
   /** Active council ID for the current workflow */
   private activeCouncilId: string | null = null;
+  /** Bootstrapped directory context — shared with all personas via prompt */
+  private bootstrappedContext: string = '';
   /** Phase-level rate limit retry count (reset per workflow start) */
   private phaseRetryCount = 0;
 
@@ -134,12 +136,13 @@ export class CodingOrchestrator {
 
     const warnings: string[] = [];
 
-    // Bootstrap directory context if enabled
+    // Bootstrap directory context if enabled — stored for all personas
     let enrichedSpec = spec;
     if (council.deliberation?.bootstrapContext && council.deliberation?.workingDirectory) {
       try {
         const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory);
         if (dirContext) {
+          this.bootstrappedContext = dirContext;
           enrichedSpec = `${dirContext}\n\n---\n\n${spec}`;
         }
       } catch (error) {
@@ -909,6 +912,20 @@ export class CodingOrchestrator {
 
     if (roleAssignment?.allowedServerIds) {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
+    }
+
+    // When tools are unavailable, inject bootstrapped context into prompt
+    if (persona.provider === 'openai-cli') {
+      invocation = { ...invocation, skipTools: true };
+    }
+    if (invocation.skipTools && this.bootstrappedContext) {
+      const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
+      if (!hasContext) {
+        invocation = {
+          ...invocation,
+          userMessage: `${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+        };
+      }
     }
 
     // Inject brevity instruction if configured
