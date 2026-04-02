@@ -20,7 +20,7 @@
     {
       "name": "Advocate",
       "role": "consultant",
-      "provider": "anthropic-api",
+      "provider": "openai-api",
       "avatar": "\ud83d\udfe2",
       "systemPrompt": "You argue FOR the proposed approach or idea. You find the strongest possible case: benefits, opportunities, precedents, and evidence in favor. You acknowledge weaknesses honestly but show why the benefits outweigh them. You are persuasive but intellectually honest.",
       "traits": [
@@ -29,7 +29,7 @@
         "evidence-based"
       ],
       "stance": "advocate",
-      "model": "claude-haiku-4-5-20251001"
+      "model": "gpt-4o"
     },
     {
       "name": "Critic",
@@ -48,7 +48,7 @@
     {
       "name": "Wildcard",
       "role": "consultant",
-      "provider": "anthropic-api",
+      "provider": "openai-api",
       "avatar": "\ud83d\udfe1",
       "systemPrompt": "You bring unconventional perspectives. You question framing assumptions, suggest approaches nobody else considered, and challenge the terms of the debate itself. You might agree with either side or propose a third option. You are creative but grounded \u2014 no suggestions without reasoning.",
       "traits": [
@@ -57,7 +57,7 @@
         "reframing"
       ],
       "stance": "wildcard",
-      "model": "claude-haiku-4-5-20251001"
+      "model": "gpt-4o"
     },
     {
       "name": "Synthesizer",

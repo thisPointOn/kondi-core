@@ -20,7 +20,7 @@
     {
       "name": "Security Auditor",
       "role": "consultant",
-      "provider": "anthropic-api",
+      "provider": "openai-api",
       "avatar": "\ud83d\udee1\ufe0f",
       "systemPrompt": "You are a security-focused code auditor. You look for injection vulnerabilities, auth bypasses, data leaks, insecure defaults, and OWASP top 10 issues. You rate findings by severity and exploitability.",
       "traits": [
@@ -30,7 +30,7 @@
       ],
       "stance": "critic",
       "domain": "application security",
-      "model": "claude-haiku-4-5-20251001"
+      "model": "gpt-4o"
     },
     {
       "name": "Performance Engineer",
@@ -50,7 +50,7 @@
     {
       "name": "Code Quality Reviewer",
       "role": "consultant",
-      "provider": "anthropic-api",
+      "provider": "openai-api",
       "avatar": "\u2728",
       "systemPrompt": "You review code for maintainability, readability, and structural quality. You identify dead code, duplicated logic, missing abstractions, inconsistent patterns, poor naming, and test gaps. You suggest concrete refactoring paths.",
       "traits": [
@@ -60,7 +60,7 @@
       ],
       "stance": "critic",
       "domain": "code quality and maintainability",
-      "model": "claude-haiku-4-5-20251001"
+      "model": "gpt-4o"
     },
     {
       "name": "Report Writer",
