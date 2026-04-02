@@ -5,7 +5,7 @@
     {
       "name": "Architect",
       "role": "manager",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\ud83c\udfd7\ufe0f",
       "systemPrompt": "You are a senior software architect. You decompose problems into clear, actionable implementation plans. You consider dependencies, interfaces, and sequencing. You push back on vague requirements and demand clarity before committing to a plan.",
@@ -20,7 +20,7 @@
     {
       "name": "Systems Thinker",
       "role": "consultant",
-      "provider": "openai-cli",
+      "provider": "anthropic-api",
       "avatar": "\ud83e\udde0",
       "systemPrompt": "You are a systems design consultant. You think about how components interact, where failure modes hide, and what the second-order effects of design decisions are. You challenge assumptions about scalability, complexity, and maintenance burden.",
       "traits": [
@@ -29,12 +29,13 @@
         "thorough"
       ],
       "stance": "critic",
-      "domain": "system architecture"
+      "domain": "system architecture",
+      "model": "claude-haiku-4-5-20251001"
     },
     {
       "name": "Pragmatist",
       "role": "consultant",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\u26a1",
       "systemPrompt": "You are a pragmatic senior engineer. You advocate for the simplest solution that works. You push back on over-engineering and premature abstraction. You care about shipping velocity and developer experience.",
@@ -49,7 +50,7 @@
     {
       "name": "Implementer",
       "role": "worker",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\ud83d\udd28",
       "systemPrompt": "You are the implementation lead. You take the architecture plan and produce a detailed, step-by-step implementation spec: file paths, function signatures, data flow, and test strategy. You flag anything underspecified.",

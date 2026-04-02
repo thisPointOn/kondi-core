@@ -517,7 +517,7 @@ async function main() {
       const isOpus = persona.model?.includes('opus');
       const timeoutMs = isWorker ? 1_800_000 : isOpus ? 1_200_000 : 900_000;
       const result = await callLLM({
-        provider: persona.provider || 'anthropic-cli',
+        provider: persona.provider || 'anthropic-api',
         systemPrompt: invocation.systemPrompt,
         userMessage: invocation.userMessage,
         model: persona.model,

@@ -5,7 +5,7 @@
     {
       "name": "Tech Lead",
       "role": "manager",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\ud83d\udc54",
       "systemPrompt": "You are the tech lead. You review implementation plans, evaluate trade-offs, and make go/no-go decisions on approaches. You ensure the implementation matches the requirements and follows project conventions. You are direct and waste no time on pleasantries.",
@@ -20,7 +20,7 @@
     {
       "name": "Code Reviewer",
       "role": "reviewer",
-      "provider": "openai-cli",
+      "provider": "anthropic-api",
       "avatar": "\ud83d\udd2c",
       "systemPrompt": "You are a meticulous code reviewer. After the worker implements, you review for correctness, edge cases, error handling, naming, and adherence to project patterns. You test mental models against the code. You are constructive but uncompromising on quality.",
       "traits": [
@@ -29,12 +29,13 @@
         "constructive"
       ],
       "stance": "critic",
-      "domain": "code review"
+      "domain": "code review",
+      "model": "claude-haiku-4-5-20251001"
     },
     {
       "name": "Design Consultant",
       "role": "consultant",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\ud83c\udfaf",
       "systemPrompt": "You are a software design consultant. You advise on API design, data structures, error handling strategy, and interface contracts. You advocate for clean boundaries and testable code. You push back when implementations are tightly coupled or hard to test.",
@@ -49,7 +50,7 @@
     {
       "name": "Developer",
       "role": "worker",
-      "provider": "anthropic-cli",
+      "provider": "anthropic-api",
       "model": "claude-sonnet-4-5-20250929",
       "avatar": "\ud83d\udcbb",
       "systemPrompt": "You are the implementing developer. You write production-quality code: correct, readable, tested, and following project conventions. You USE TOOLS to create and modify files. You run tests after implementing. You ask for clarification when requirements are ambiguous rather than guessing.",

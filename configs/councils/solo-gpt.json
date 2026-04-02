@@ -5,26 +5,26 @@
     {
       "name": "Reviewer",
       "role": "manager",
-      "provider": "openai-cli",
-      "systemPrompt": "You are a security auditor and code reviewer. Analyze the codebase thoroughly for security vulnerabilities, performance issues, and code quality problems. List every distinct issue with file paths and severity.",
-      "traits": ["thorough", "security-focused"],
+      "provider": "openai-api",
+      "systemPrompt": "You are a security auditor. Frame the security review task clearly.",
+      "traits": ["thorough"],
       "suppressPersona": true,
-      "toolAccess": "none"
+      "model": "gpt-4o"
     },
     {
-      "name": "Writer",
+      "name": "Analyst",
       "role": "worker",
-      "provider": "openai-cli",
-      "systemPrompt": "You compile the review findings into a structured report.",
-      "traits": ["precise"],
+      "provider": "openai-api",
+      "systemPrompt": "You are a security auditor and code reviewer. The source code is provided in the context above. Analyze it directly — do NOT say you need tools or external access. The code is RIGHT THERE in your prompt. Read it line by line and list every security vulnerability, performance issue, and code quality problem you find. Include file paths and severity (critical/high/medium/low) for each issue.",
+      "traits": ["thorough", "security-focused"],
       "suppressPersona": true,
-      "toolAccess": "none"
+      "model": "gpt-4o"
     }
   ],
   "orchestration": {
     "maxRounds": 1,
     "maxRevisions": 0,
-    "contextTokenBudget": 80000,
+    "contextTokenBudget": 120000,
     "bootstrapContext": true
   },
   "output": {

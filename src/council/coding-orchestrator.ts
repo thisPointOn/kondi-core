@@ -140,7 +140,7 @@ export class CodingOrchestrator {
     let enrichedSpec = spec;
     if (council.deliberation?.bootstrapContext && council.deliberation?.workingDirectory) {
       try {
-        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory);
+        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory, { deep: true });
         if (dirContext) {
           this.bootstrappedContext = dirContext;
           enrichedSpec = `${dirContext}\n\n---\n\n${spec}`;
@@ -914,11 +914,8 @@ export class CodingOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // When tools are unavailable, inject bootstrapped context into prompt
-    if (persona.provider === 'openai-cli') {
-      invocation = { ...invocation, skipTools: true };
-    }
-    if (invocation.skipTools && this.bootstrappedContext) {
+    // All providers are API-based. Inject bootstrapped context into every prompt.
+    if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
         invocation = {

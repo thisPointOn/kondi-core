@@ -16,3 +16,9 @@ integrations/NEXT-STEPS.md
 /CRITICAL_*
 /EXECUTIVE_*
 /ISSUES_*
+
+# Secrets
+.env
+.env.*
+*.key
+api_keys*

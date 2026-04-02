@@ -9,6 +9,21 @@
  *   kondi --version             Show version
  */
 
+// Load .env if present (API keys)
+import { readFileSync, existsSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirnameLocal = dirname(fileURLToPath(import.meta.url));
+for (const envPath of [resolve(process.cwd(), '.env'), resolve(__dirnameLocal, '..', '..', '.env')]) {
+  if (existsSync(envPath)) {
+    for (const line of readFileSync(envPath, 'utf-8').split('\n')) {
+      const m = line.match(/^([A-Z_]+)=(.+)$/);
+      if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
+    }
+    break;
+  }
+}
+
 const C = {
   reset: '\x1b[0m',
   bold: '\x1b[1m',

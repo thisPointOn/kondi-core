@@ -562,7 +562,7 @@ export class DeliberationOrchestrator {
     let enrichedProblem = rawProblem;
     if (council.deliberation?.bootstrapContext && council.deliberation?.workingDirectory) {
       try {
-        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory);
+        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory, { deep: true });
         if (dirContext) {
           this.bootstrappedContext = dirContext;
           enrichedProblem = `${dirContext}\n\n---\n\n${rawProblem}`;
@@ -1668,7 +1668,7 @@ export class DeliberationOrchestrator {
     let enrichedProblem = rawProblem;
     if (council.deliberation?.bootstrapContext && council.deliberation?.workingDirectory) {
       try {
-        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory);
+        const dirContext = await bootstrapDirectoryContext(council.deliberation.workingDirectory, { deep: true });
         if (dirContext) {
           enrichedProblem = `${dirContext}\n\n---\n\n${rawProblem}`;
         }
@@ -2268,13 +2268,9 @@ export class DeliberationOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // When tools are unavailable (skipTools, non-CLI providers, sandboxed CLIs),
-    // inject bootstrapped directory context directly into the prompt so every
-    // persona sees the same baseline regardless of provider.
-    if (persona.provider === 'openai-cli') {
-      invocation = { ...invocation, skipTools: true };
-    }
-    if (invocation.skipTools && this.bootstrappedContext) {
+    // All providers are API-based (no tools). Inject bootstrapped directory
+    // context into every prompt so all personas see the same codebase.
+    if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
         invocation = {

@@ -30,14 +30,11 @@ import { DeliberationOrchestrator } from '../council/deliberation-orchestrator';
 import { CodingOrchestrator } from '../council/coding-orchestrator';
 import { ledgerStore } from '../council/ledger-store';
 import { buildAbbreviatedSummary } from '../services/deliberationSummary';
-import { callLLM, DEFAULT_MODELS } from './llm-caller';
-import { activeChildren as claudeChildren } from './claude-caller';
-import { activeChildren as codexChildren } from './codex-caller';
+import { callLLM, DEFAULT_MODELS, type CallerResult } from './llm-caller';
 import { loadCouncilConfig, mergeConfigWithArgs } from './council-config';
 import { writeCouncilArtifacts, buildJsonResult } from './council-artifacts';
 import { exportCouncilSession } from './council-session-export';
 import type { CouncilCliArgs, OutputFormat } from './council-config';
-import type { CallerResult } from './claude-caller';
 import type { Council, Persona, CouncilStepType } from '../council/types';
 
 // ── ANSI colors ──
@@ -247,7 +244,7 @@ async function main() {
       outputDir = resolved.outputDir;
       sessionExport = resolved.sessionExport;
 
-      const defaultProvider = resolved.provider || 'anthropic-cli';
+      const defaultProvider = resolved.provider || 'anthropic-api';
 
       council = createCouncilFromSetup({
         name: configFile.name,
@@ -287,7 +284,7 @@ async function main() {
     } else if (args.task) {
       // Path 3: Inline task with default personas
       task = args.task;
-      const defaultProvider = args.provider || 'anthropic-cli';
+      const defaultProvider = args.provider || 'anthropic-api';
       const defaultModel = args.model || 'claude-sonnet-4-5-20250929';
 
       council = createCouncilFromSetup({
@@ -350,7 +347,7 @@ async function main() {
     log(C.cyan, persona.name, `Thinking... (${persona.model})`);
 
     const result = await callLLM({
-      provider: persona.provider || 'anthropic-cli',
+      provider: persona.provider || 'anthropic-api',
       systemPrompt: invocation.systemPrompt,
       userMessage: invocation.userMessage,
       model: persona.model,
@@ -477,16 +474,6 @@ async function main() {
     process.exit(1);
   }
 }
-
-// Kill any lingering child processes on exit
-function cleanupChildren() {
-  for (const child of [...claudeChildren, ...codexChildren]) {
-    try { child.kill('SIGTERM'); } catch { /* already exited */ }
-  }
-}
-process.on('exit', cleanupChildren);
-process.on('SIGINT', () => { cleanupChildren(); process.exit(130); });
-process.on('SIGTERM', () => { cleanupChildren(); process.exit(143); });
 
 main().catch((err) => {
   console.error(`${C.red}Unhandled error:${C.reset}`, err);

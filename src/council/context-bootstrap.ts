@@ -10,7 +10,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const MAX_FILE_SIZE = 2048; // chars per key file
-const MAX_TOTAL_CHARS = 10000;
+const MAX_TOTAL_CHARS_DEFAULT = 10000;
+const MAX_TOTAL_CHARS_DEEP = 120000; // ~30k tokens — enough for full source review
 
 const KEY_FILES = [
   'README.md',
@@ -33,25 +34,33 @@ const KEY_ENTRY_PATTERNS = [
   'main.go', 'main.py', 'app.py',
 ];
 
+const SOURCE_EXTENSIONS = ['.ts', '.js', '.tsx', '.jsx', '.py', '.rs', '.go', '.java', '.rb'];
+
 /**
  * Bootstrap directory context by scanning the working directory.
+ * When deep=true, reads all source files (for personas without tool access).
  * Returns a formatted context block, or empty string if scanning fails.
  */
 export async function bootstrapDirectoryContext(
   workingDir: string,
-  options?: { maxFiles?: number; maxFileSize?: number }
+  options?: { maxFiles?: number; maxFileSize?: number; deep?: boolean }
 ): Promise<string> {
   const maxFiles = options?.maxFiles ?? 80;
   const maxFileSize = options?.maxFileSize ?? MAX_FILE_SIZE;
+  const deep = options?.deep ?? false;
+  const maxTotalChars = deep ? MAX_TOTAL_CHARS_DEEP : MAX_TOTAL_CHARS_DEFAULT;
 
   try {
     // Step 1: Get directory tree
     let tree = '';
+    let fileList: string[] = [];
     try {
-      tree = execSync(
-        `find . -maxdepth 3 -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' -not -path '*/__pycache__/*' -not -path '*/.next/*' -not -path '*/dist/*' | sort | head -${maxFiles}`,
+      const rawTree = execSync(
+        `find . -maxdepth 4 -type f -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/target/*' -not -path '*/__pycache__/*' -not -path '*/.next/*' -not -path '*/dist/*' -not -path '*/package-lock.json' | sort | head -${maxFiles}`,
         { cwd: workingDir, encoding: 'utf-8', timeout: 10_000 }
       ).trim();
+      tree = rawTree;
+      fileList = rawTree.split('\n').filter(Boolean);
     } catch {
       // find command failed, continue without tree
     }
@@ -60,33 +69,40 @@ export async function bootstrapDirectoryContext(
     const keyFileContents: Array<{ name: string; content: string }> = [];
     let totalChars = tree.length + 200; // overhead for headers
 
+    const resolvedBase = resolve(workingDir);
+
+    // Key files first
     const filesToTry = [...KEY_FILES, ...KEY_ENTRY_PATTERNS];
-
     for (const fileName of filesToTry) {
-      if (totalChars >= MAX_TOTAL_CHARS) break;
-
-      try {
-        const filePath = join(workingDir.replace(/\/$/, ''), fileName);
-        const resolvedPath = resolve(filePath);
-        const resolvedBase = resolve(workingDir);
-        if (!resolvedPath.startsWith(resolvedBase + '/') && resolvedPath !== resolvedBase) continue;
-        if (!existsSync(filePath)) continue;
-
-        const content = readFileSync(filePath, 'utf-8');
-
-        if (content && content.length > 0) {
-          const truncated = content.length > maxFileSize
-            ? content.slice(0, maxFileSize) + '\n... (truncated)'
-            : content;
-          keyFileContents.push({ name: fileName, content: truncated });
-          totalChars += truncated.length + fileName.length + 20;
-        }
-      } catch {
-        // File doesn't exist or unreadable, skip
+      if (totalChars >= maxTotalChars) break;
+      const content = safeReadFile(workingDir, resolvedBase, fileName, maxFileSize);
+      if (content) {
+        keyFileContents.push({ name: fileName, content });
+        totalChars += content.length + fileName.length + 20;
       }
     }
 
-    // Step 3: Format output
+    // Step 3: In deep mode, read all source files from the tree
+    if (deep && fileList.length > 0) {
+      const sourceFiles = fileList.filter(f =>
+        SOURCE_EXTENSIONS.some(ext => f.endsWith(ext)) &&
+        !filesToTry.some(kf => f.endsWith(kf))
+      );
+
+      for (const relPath of sourceFiles) {
+        if (totalChars >= maxTotalChars) break;
+        const cleanPath = relPath.startsWith('./') ? relPath.slice(2) : relPath;
+        const deepMaxSize = Math.min(4096, maxTotalChars - totalChars);
+        if (deepMaxSize < 100) break;
+        const content = safeReadFile(workingDir, resolvedBase, cleanPath, deepMaxSize);
+        if (content) {
+          keyFileContents.push({ name: cleanPath, content });
+          totalChars += content.length + cleanPath.length + 20;
+        }
+      }
+    }
+
+    // Step 4: Format output
     if (!tree && keyFileContents.length === 0) {
       return '';
     }
@@ -109,5 +125,23 @@ export async function bootstrapDirectoryContext(
   } catch (error) {
     console.warn('[ContextBootstrap] Failed to bootstrap directory context:', error);
     return '';
+  }
+}
+
+function safeReadFile(workingDir: string, resolvedBase: string, fileName: string, maxSize: number): string | null {
+  try {
+    const filePath = join(workingDir.replace(/\/$/, ''), fileName);
+    const resolvedPath = resolve(filePath);
+    if (!resolvedPath.startsWith(resolvedBase + '/') && resolvedPath !== resolvedBase) return null;
+    if (!existsSync(filePath)) return null;
+
+    const content = readFileSync(filePath, 'utf-8');
+    if (!content || content.length === 0) return null;
+
+    return content.length > maxSize
+      ? content.slice(0, maxSize) + '\n... (truncated)'
+      : content;
+  } catch {
+    return null;
   }
 }
