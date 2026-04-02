@@ -8,3 +8,11 @@ dist/
 integrations/content/
 integrations/LAUNCH-PLAN.md
 integrations/NEXT-STEPS.md
+
+# Generated audit/report files (created by council runs against self)
+/AUDIT_*
+/SECURITY_*
+/COMPREHENSIVE_*
+/CRITICAL_*
+/EXECUTIVE_*
+/ISSUES_*
