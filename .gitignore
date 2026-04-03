@@ -22,3 +22,4 @@ integrations/NEXT-STEPS.md
 .env.*
 *.key
 api_keys*
+.kondi/
