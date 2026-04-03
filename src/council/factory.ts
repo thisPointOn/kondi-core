@@ -23,7 +23,7 @@ export interface CouncilSetup {
   /** Standing instructions — what this council should do (the task/directive) */
   task?: string;
   personas: PipelinePersona[];
-  maxRounds?: number;                 // Default: 4
+  maxRounds?: number;                 // Default: 2
   maxRevisions?: number;              // Default: 3
   expectedOutput?: string;
   decisionCriteria?: string[];
@@ -133,7 +133,7 @@ export function createCouncilFromSetup(setup: CouncilSetup): Council {
       enabled: true,
       roleAssignments,
       minRounds: 1,
-      maxRounds: setup.maxRounds ?? 4,
+      maxRounds: setup.maxRounds ?? 2,
       maxRevisions: setup.maxRevisions ?? 3,
       savedProblem: setup.task,
       expectedOutput: setup.expectedOutput,

@@ -26,6 +26,9 @@ import { migrateLlmConfig } from '../pipeline/types';
 import { callLLM } from './llm-caller';
 import { createNodePlatform } from './node-platform';
 import { exportSession } from './session-export';
+import { createBudgetAwareInvoker } from '../budget/budget-aware-invoker';
+import { mapStepTypeToStage } from '../budget/phase-stage-map';
+import type { ModelTier } from '../budget/budget-tracker';
 
 // ── ANSI colors ──
 const C = {
@@ -90,6 +93,7 @@ function parseArgs() {
   let model: string | null = null;
   let pipelineName: string | null = null;
   let dryRun = false;
+  let noCache = false;
 
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--working-dir' && args[i + 1]) {
@@ -98,6 +102,8 @@ function parseArgs() {
       model = args[++i];
     } else if (args[i] === '--name' && args[i + 1]) {
       pipelineName = args[++i];
+    } else if (args[i] === '--no-cache') {
+      noCache = true;
     } else if (args[i] === '--dry-run') {
       dryRun = true;
     } else if (args[i] === '--help' || args[i] === '-h') {
@@ -111,6 +117,7 @@ Options:
   --working-dir <path>   Override the pipeline's working directory
   --model <model>        Override the model for all LLM steps
   --name <name>          Select pipeline by name (when file contains multiple)
+  --no-cache             Disable Anthropic prompt caching (same as KONDI_NO_CACHE=1)
   --dry-run              Print pipeline structure without running
   --help                 Show this help
 
@@ -135,7 +142,7 @@ Output:
     process.exit(1);
   }
 
-  return { pipelineFile, workingDir, model, pipelineName, dryRun };
+  return { pipelineFile, workingDir, model, pipelineName, dryRun, noCache };
 }
 
 // ── Load pipeline JSON ──
@@ -453,7 +460,7 @@ function formatDuration(ms: number): string {
 
 // ── Main ──
 async function main() {
-  const { pipelineFile, workingDir, model, pipelineName, dryRun } = parseArgs();
+  const { pipelineFile, workingDir, model, pipelineName, dryRun, noCache } = parseArgs();
   const pipeline = loadPipeline(pipelineFile, workingDir, model, pipelineName);
 
   printPipelineStructure(pipeline);
@@ -503,31 +510,63 @@ async function main() {
   const startTime = Date.now();
   const stepTimers: Record<string, number> = {};
 
+  // Create budget-aware invoker with persistence
+  const budgetInvoker = createBudgetAwareInvoker({
+    verbose: true,
+    restoreState: true,
+  });
+
+  // Track current step type for budget stage mapping
+  // Initialize to 'council' to ensure first call (before step execution) maps to 'deliberation'
+  let currentStepType: string = 'council';
+
   // Create executor
   const executor = new PipelineExecutor({
     invokeAgent: async (invocation, persona) => {
       log(C.cyan, persona.name, `Invoking (${persona.model})...`);
+
+      // Map current step type to budget stage
+      const budgetStage = mapStepTypeToStage(currentStepType as any);
+
+      // Determine requested tier based on provider/model
+      let requestedTier: ModelTier = 'openai-mini';
+      if (persona.provider === 'anthropic-api' || persona.model?.includes('claude')) {
+        requestedTier = 'anthropic-premium';
+      } else if (persona.model?.includes('gpt-4o') && !persona.model?.includes('mini')) {
+        requestedTier = 'openai-mid';
+      }
+
       // Build allowedTools from allowedServerIds if set
       const allowedTools = invocation.allowedServerIds
         ? ['Edit', 'Write', 'Read', 'Bash', 'Glob', 'Grep', ...invocation.allowedServerIds.map(id => `mcp__${id}`)]
         : undefined;
+
       // Use generous timeouts: workers get 30 min, Opus models get 20 min, others get 15 min.
-      // Complex deliberation phases (deciding, planning) with large context can take a long time.
       const isWorker = persona.preferredDeliberationRole === 'worker';
       const isOpus = persona.model?.includes('opus');
       const timeoutMs = isWorker ? 1_800_000 : isOpus ? 1_200_000 : 900_000;
-      const result = await callLLM({
-        provider: persona.provider || 'anthropic-api',
-        systemPrompt: invocation.systemPrompt,
-        userMessage: invocation.userMessage,
-        model: persona.model,
-        workingDir: platform.getWorkingDir(),
-        skipTools: invocation.skipTools,
-        conversationId: invocation.conversationId,
-        allowedTools,
-        timeoutMs,
+
+      // Use budget-aware invoker
+      const result = await budgetInvoker.invoke({
+        stage: budgetStage,
+        requestedTier,
+        persona,
+        invocation: {
+          systemPrompt: invocation.systemPrompt,
+          userMessage: invocation.userMessage,
+          workingDirectory: platform.getWorkingDir(),
+          skipTools: invocation.skipTools,
+          allowedTools,
+          timeoutMs,
+          cacheableContext: invocation.cacheableContext,
+        },
       });
-      log(C.cyan, persona.name, `Done (${result.tokensUsed} tokens, ${(result.latencyMs / 1000).toFixed(1)}s)`);
+
+      log(C.cyan, persona.name, `Done (${result.tokensUsed} tokens, ${(result.latencyMs / 1000).toFixed(1)}s, $${result.costUSD.toFixed(4)})`);
+      if (result.downgraded) {
+        log(C.yellow, 'Budget', `Downgraded to ${result.actualTier} (${result.reasonCode})`);
+      }
+
       return { ...result, sessionId: result.sessionId };
     },
 
@@ -547,6 +586,11 @@ async function main() {
       const stageName = p?.stages.find(s => s.steps.some(st => st.id === stepId))?.name || '?';
       log(C.magenta, 'Step', `${step?.name || stepId} [${step?.config.type || '?'}]`);
       stepTimers[stepId] = Date.now();
+
+      // Track current step type for budget mapping
+      if (step) {
+        currentStepType = step.config.type;
+      }
 
       // Create execution log entry
       const record: StepExecutionRecord = {
@@ -676,6 +720,18 @@ async function main() {
             }
           }
         }
+      }
+    }
+
+    // Budget telemetry
+    const telemetry = budgetInvoker.getTelemetry();
+    console.log(`\n${C.bold}${C.cyan}Budget Summary${C.reset}`);
+    console.log(`${C.dim}Total spend: $${telemetry.totalSpendUSD.toFixed(4)} (${telemetry.runUtilization.toFixed(1)}% of run cap)${C.reset}`);
+    console.log(`${C.dim}Anthropic calls: ${telemetry.anthropicCalls} ($${telemetry.anthropicSpend.toFixed(4)})${C.reset}`);
+    if (telemetry.downgrades > 0) {
+      console.log(`${C.yellow}Downgrades: ${telemetry.downgrades}${C.reset}`);
+      for (const d of telemetry.recentDowngrades) {
+        console.log(`  ${C.dim}${d.fromTier} → ${d.toTier} (${d.reasonCode})${C.reset}`);
       }
     }
 

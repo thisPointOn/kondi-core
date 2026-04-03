@@ -733,6 +733,9 @@ export interface DeliberationConfig {
   /** Whether to auto-scan workingDirectory for context bootstrapping */
   bootstrapContext?: boolean;
 
+  /** Enable Anthropic prompt caching for bootstrap context (default: true) */
+  enablePromptCaching?: boolean;
+
   /** Whether to append consultant findings and worker results to the shared context document.
    *  When true, context evolves through the deliberation (v1 → v2 → v3...).
    *  When false (default), context stays at v1 and findings only live in the ledger. */

@@ -12,7 +12,9 @@
     "council": "npx tsx src/cli/run-council.ts",
     "pipeline": "npx tsx src/cli/run-pipeline.ts",
     "build": "node scripts/bundle.mjs",
-    "test": "npx tsx src/cli/run-council.ts --task 'test' --dry-run"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "tsx": "^4.0.0",
@@ -22,8 +24,22 @@
     "node": ">=20"
   },
   "keywords": [
-    "ai", "llm", "multi-agent", "council", "deliberation",
-    "claude", "openai", "codex", "gemini", "cli",
-    "code-review", "multi-model", "agent-orchestration"
-  ]
+    "ai",
+    "llm",
+    "multi-agent",
+    "council",
+    "deliberation",
+    "claude",
+    "openai",
+    "codex",
+    "gemini",
+    "cli",
+    "code-review",
+    "multi-model",
+    "agent-orchestration"
+  ],
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "vitest": "^4.1.2"
+  }
 }

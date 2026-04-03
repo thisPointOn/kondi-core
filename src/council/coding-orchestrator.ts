@@ -59,6 +59,8 @@ export interface AgentInvocation {
   skipTools?: boolean;
   /** MCP servers this invocation can access (undefined = all servers) */
   allowedServerIds?: string[];
+  /** Cacheable context (e.g., bootstrap directory scan) for Anthropic prompt caching */
+  cacheableContext?: string;
 }
 
 export interface AgentResponse {
@@ -914,13 +916,16 @@ export class CodingOrchestrator {
       invocation = { ...invocation, allowedServerIds: roleAssignment.allowedServerIds };
     }
 
-    // Inject bootstrapped context into every prompt — same instruction for all models.
+    // Inject bootstrapped context into every prompt — cacheable if prompt caching is enabled.
     if (this.bootstrappedContext) {
       const hasContext = invocation.userMessage.includes(this.bootstrappedContext.slice(0, 100));
       if (!hasContext) {
+        // Instead of injecting into userMessage, pass as separate cacheableContext
+        // so Anthropic's prompt caching can deduplicate it across calls
         invocation = {
           ...invocation,
-          userMessage: `## PROJECT CONTEXT\n\nThe complete source code and project structure are provided below. This is your primary source of information. Analyze the code directly from what is provided here.\n\n${this.bootstrappedContext}\n\n---\n\n${invocation.userMessage}`,
+          cacheableContext: `## PROJECT CONTEXT\n\nThe complete source code and project structure are provided below. This is your primary source of information. Analyze the code directly from what is provided here.\n\n${this.bootstrappedContext}`,
+          userMessage: invocation.userMessage, // Keep userMessage clean
         };
       }
     }

@@ -1,45 +1,33 @@
 #!/usr/bin/env -S npx tsx
 /**
- * CLI Council Runner
+ * CLI Council Runner (Budget-Integrated)
  *
- * Usage:
- *   kondi council <council.json> [options]
- *   kondi council --task "Your task here" [options]
- *   kondi council --config <council-config.json> [options]
- *   kondi council [options]                         (auto-discovers council.json in cwd)
- *
- * Runs a standalone council deliberation. Supports all council types:
- * council, coding, analysis, review, agent, enrich, code_planning.
- *
- * Examples:
- *   kondi council --task "Review this codebase for security issues" --working-dir ./myapp --type review
- *   kondi council --task "Build a REST API" --working-dir ./project --type coding
- *   kondi council --config ~/configs/security-review.json --working-dir ./target
- *   kondi council exported-council.json
- *   kondi council --task "Analyze logs" --output json --json-stdout --quiet
+ * Integrated version with budget-aware invocation, phase-to-stage mapping,
+ * persistent budget state, and unified retry logic.
  */
 
 // ── localStorage shim MUST be imported first ──
-import { storage } from './localStorage-shim';
+import { storage } from '../../src/cli/localStorage-shim';
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { councilStore } from '../council/store';
-import { createCouncilFromSetup } from '../council/factory';
-import { DeliberationOrchestrator } from '../council/deliberation-orchestrator';
-import { CodingOrchestrator } from '../council/coding-orchestrator';
-import { ledgerStore } from '../council/ledger-store';
-import { buildAbbreviatedSummary } from '../services/deliberationSummary';
-import { callLLM, DEFAULT_MODELS, type CallerResult } from './llm-caller';
-import { loadCouncilConfig, mergeConfigWithArgs } from './council-config';
-import { writeCouncilArtifacts, buildJsonResult } from './council-artifacts';
-import { exportCouncilSession } from './council-session-export';
-import type { CouncilCliArgs, OutputFormat } from './council-config';
-import type { Council, Persona } from '../council/types';
-import type { CouncilStepType } from '../pipeline/types';
-import { createBudgetAwareInvoker } from '../budget/budget-aware-invoker';
-import { mapPhaseToStage } from '../budget/phase-stage-map';
-import type { ModelTier } from '../budget/budget-tracker';
+import { councilStore } from '../../src/council/store';
+import { createCouncilFromSetup } from '../../src/council/factory';
+import { DeliberationOrchestrator } from '../../src/council/deliberation-orchestrator';
+import { CodingOrchestrator } from '../../src/council/coding-orchestrator';
+import { ledgerStore } from '../../src/council/ledger-store';
+import { buildAbbreviatedSummary } from '../../src/services/deliberationSummary';
+import { DEFAULT_MODELS, type CallerResult } from '../../src/cli/llm-caller';
+import { loadCouncilConfig, mergeConfigWithArgs } from '../../src/cli/council-config';
+import { writeCouncilArtifacts, buildJsonResult } from '../../src/cli/council-artifacts';
+import { exportCouncilSession } from '../../src/cli/council-session-export';
+import type { CouncilCliArgs, OutputFormat } from '../../src/cli/council-config';
+import type { Council, Persona, CouncilStepType } from '../../src/council/types';
+
+// Budget integration imports
+import { createBudgetAwareInvoker } from '../../src/budget/budget-aware-invoker';
+import { mapPhaseToStage } from '../../src/budget/phase-stage-map';
+import type { ModelTier } from '../../src/budget/budget-tracker';
 
 // ── ANSI colors ──
 const C = {
@@ -131,7 +119,7 @@ function parseArgs(): CouncilCliArgs {
 
 function printHelp() {
   console.log(`
-${C.bold}Kondi Council Runner${C.reset}
+${C.bold}Kondi Council Runner (Budget-Integrated)${C.reset}
 
 Usage:
   kondi council <council.json> [options]
@@ -154,18 +142,6 @@ Options:
   --quiet                Suppress progress output (for automation)
   --json-stdout          Print structured JSON result to stdout
   --help                 Show this help
-
-Config auto-discovery:
-  If no --config, --task, or council.json is provided, searches for:
-    1. ./council.json (current directory)
-    2. ~/.config/kondi/council.json
-
-Output formats:
-  full         deliberation.md + decision.md + output.md
-  abbreviated  summary.md only
-  output-only  output.md only (worker's final deliverable)
-  json         council-result.json (structured data)
-  none         no file output
 `);
 }
 
@@ -196,12 +172,29 @@ function printCouncilStructure(council: Council, councilType: string, task: stri
   console.log();
 }
 
+/**
+ * Map provider + model to a budget tier.
+ * Simplified mapping for demonstration.
+ */
+function mapProviderModelToTier(provider: string, model: string): ModelTier {
+  if (provider === 'anthropic-api') {
+    return 'anthropic-premium';
+  }
+  if (model.includes('gpt-4o-mini')) {
+    return 'openai-mini';
+  }
+  if (model.includes('gpt-4')) {
+    return 'openai-mid';
+  }
+  return 'openai-mid'; // Default
+}
+
 // ── Main ──
 async function main() {
   const args = parseArgs();
   quietMode = args.quiet || false;
 
-  // ── Resolve council source ──
+  // ── Resolve council source (same as original) ──
   let council: Council;
   let councilType: CouncilStepType = args.type || 'council';
   let task: string;
@@ -347,62 +340,59 @@ async function main() {
   log(C.green, 'Council', `Output: ${outputFormat}`);
   if (!quietMode) console.log('');
 
-  // Council calls are stateless one-shot — no session resumption.
-  // Each persona call gets a fresh context. See CLAUDE.md rule #2.
-  const startTime = Date.now();
-
-  // Create budget-aware invoker with persistence
+  // ── Create budget-aware invoker ──
   const budgetInvoker = createBudgetAwareInvoker({
     verbose: !quietMode,
-    restoreState: true,
+    restoreState: false, // Fresh run
   });
 
-  // Track current phase dynamically for budget stage mapping
-  // Initialize to 'created' to ensure first call (before onPhaseChange) maps to 'context_retrieval'
-  let currentPhase: string = 'created';
+  const startTime = Date.now();
+
+  // Track current phase for stage mapping
+  let currentPhase = 'problem_framing';
 
   const invokeAgent = async (invocation: any, persona: Persona) => {
     log(C.cyan, persona.name, `Thinking... (${persona.model})`);
 
-    // Map current live phase to budget stage at call time
-    const budgetStage = mapPhaseToStage(currentPhase as any);
+    // Map provider/model to tier
+    const requestedTier = mapProviderModelToTier(persona.provider, persona.model);
 
-    // Determine requested tier based on provider/model
-    let requestedTier: ModelTier = 'openai-mini';
-    if (persona.provider === 'anthropic-api' || persona.model?.includes('claude')) {
-      requestedTier = 'anthropic-premium';
-    } else if (persona.model?.includes('gpt-4o') && !persona.model?.includes('mini')) {
-      requestedTier = 'openai-mid';
+    // Map current phase to budget stage
+    const stage = mapPhaseToStage(currentPhase as any);
+
+    try {
+      const result = await budgetInvoker.invoke({
+        stage,
+        requestedTier,
+        persona,
+        invocation: {
+          systemPrompt: invocation.systemPrompt,
+          userMessage: invocation.userMessage,
+          workingDirectory: invocation.workingDirectory || workingDir,
+          skipTools: invocation.skipTools,
+          allowedTools: invocation.allowedTools,
+          timeoutMs: invocation.timeoutMs || 900_000,
+          cacheableContext: invocation.cacheableContext,
+        },
+      });
+
+      log(C.cyan, persona.name, `Done (${result.tokensUsed} tokens, ${(result.latencyMs / 1000).toFixed(1)}s)`);
+
+      if (result.downgraded) {
+        log(C.yellow, persona.name, `Model downgraded to ${result.actualModel} (${result.reasonCode})`);
+      }
+
+      return { ...result, sessionId: result.sessionId };
+    } catch (error) {
+      log(C.red, persona.name, `Failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
     }
-
-    // Use budget-aware invoker
-    const result = await budgetInvoker.invoke({
-      stage: budgetStage,
-      requestedTier,
-      persona,
-      invocation: {
-        systemPrompt: invocation.systemPrompt,
-        userMessage: invocation.userMessage,
-        workingDirectory: invocation.workingDirectory || workingDir,
-        skipTools: invocation.skipTools,
-        allowedTools: invocation.allowedTools,
-        timeoutMs: invocation.timeoutMs || 900_000,
-        cacheableContext: invocation.cacheableContext,
-      },
-    });
-
-    log(C.cyan, persona.name, `Done (${result.tokensUsed} tokens, ${(result.latencyMs / 1000).toFixed(1)}s, $${result.costUSD.toFixed(4)})`);
-    if (result.downgraded) {
-      log(C.yellow, 'Budget', `Downgraded to ${result.actualTier} (${result.reasonCode})`);
-    }
-
-    return { ...result, sessionId: result.sessionId };
   };
 
   const callbacks = {
     invokeAgent,
     onPhaseChange: (from: string, to: string) => {
-      currentPhase = to; // Track phase changes for dynamic budget stage mapping
+      currentPhase = to;
       log(C.yellow, 'Phase', `${from} → ${to}`);
     },
     onError: (err: Error, ctx: string) => log(C.red, 'Error', `${ctx}: ${err.message}`),
@@ -451,6 +441,15 @@ async function main() {
 
   const durationMs = Date.now() - startTime;
 
+  // ── Print budget telemetry ──
+  if (!quietMode) {
+    const telemetry = budgetInvoker.getTelemetry();
+    console.log(`\n${C.bold}Budget Summary:${C.reset}`);
+    console.log(`  Total spend: $${telemetry.totalSpendUSD.toFixed(4)} (${telemetry.runUtilization.toFixed(1)}%)`);
+    console.log(`  Anthropic calls: ${telemetry.anthropicCalls} ($${telemetry.anthropicSpend.toFixed(4)})`);
+    console.log(`  Downgrades: ${telemetry.downgrades}`);
+  }
+
   // ── Print summary ──
   if (!quietMode) {
     const completed = councilStore.get(council.id);
@@ -463,18 +462,6 @@ async function main() {
     const entries = ledgerStore.getAll(council.id);
     const totalTokens = entries.reduce((s, e) => s + (e.tokensUsed || 0), 0);
     console.log(`\n${C.dim}Entries: ${entries.length} | Tokens: ${totalTokens.toLocaleString()} | Time: ${(durationMs / 1000).toFixed(0)}s${C.reset}`);
-
-    // Budget telemetry
-    const telemetry = budgetInvoker.getTelemetry();
-    console.log(`\n${C.bold}${C.cyan}Budget Summary${C.reset}`);
-    console.log(`${C.dim}Total spend: $${telemetry.totalSpendUSD.toFixed(4)} (${telemetry.runUtilization.toFixed(1)}% of run cap)${C.reset}`);
-    console.log(`${C.dim}Anthropic calls: ${telemetry.anthropicCalls} ($${telemetry.anthropicSpend.toFixed(4)})${C.reset}`);
-    if (telemetry.downgrades > 0) {
-      console.log(`${C.yellow}Downgrades: ${telemetry.downgrades}${C.reset}`);
-      for (const d of telemetry.recentDowngrades) {
-        console.log(`  ${C.dim}${d.fromTier} → ${d.toTier} (${d.reasonCode})${C.reset}`);
-      }
-    }
   }
 
   // ── Write artifacts ──

@@ -73,6 +73,7 @@ export interface CouncilCliArgs {
   outputFormat?: OutputFormat;
   outputDir?: string;
   noSessionExport?: boolean;
+  noCache?: boolean;
   dryRun?: boolean;
   quiet?: boolean;
   jsonStdout?: boolean;
